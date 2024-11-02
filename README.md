@@ -40,7 +40,7 @@ sudo apt install ffmpeg
 
 1. Clone this repository or download the script:
 ```bash
-git clone https://github.com/yourusername/ts-to-mp4-converter.git
+git clone https://github.com/BimaPangestu28/ts-to-mp4-converter.git
 cd ts-to-mp4-converter
 ```
 
