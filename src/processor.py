@@ -4,8 +4,11 @@ import tempfile
 import shutil
 import psutil
 import multiprocessing
+import math
+import time
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+from datetime import datetime
 from .constants import COMPRESSION_SETTINGS, DEFAULT_FFMPEG_PARAMS, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE, DEFAULT_KEYFRAME_INTERVAL
 from .utils import get_video_info, calculate_target_bitrate
 
@@ -89,8 +92,8 @@ class VideoProcessor:
         try:
             chunks = []
             video_info = get_video_info(input_file)
-            if not video_info:
-                return []
+            if not video_info or 'format' not in video_info:
+                return [], None
 
             duration = float(video_info['format']['duration'])
             self.optimize_video_params(video_info)
@@ -123,7 +126,7 @@ class VideoProcessor:
                     chunks.append(chunk_file)
                     pbar.update(1)
 
-            return chunks, duration
+                return chunks, duration
         except Exception as e:
             print(f"Error creating chunks: {str(e)}")
             return [], None
@@ -204,13 +207,28 @@ class VideoProcessor:
         """Convert video with all optimizations"""
         try:
             input_filename = os.path.basename(input_file)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = os.path.join(
                 output_dir, 
-                f"{os.path.splitext(input_filename)[0]}_{int(time.time())}.mp4"
+                f"{os.path.splitext(input_filename)[0]}_{timestamp}.mp4"
             )
 
             print(f"\nProcessing: {input_filename}")
             print(f"Analyzing video...")
+            
+            # Get initial duration from video info
+            video_info = get_video_info(input_file)
+            if not video_info or 'format' not in video_info:
+                raise Exception("Could not analyze video file")
+                
+            duration = float(video_info['format']['duration'])
+            
+            # Calculate chunk size if not provided
+            if not chunk_size:
+                chunk_size = min(MAX_CHUNK_SIZE, max(MIN_CHUNK_SIZE, duration / 10))
+                
+            print(f"Video duration: {duration:.1f} seconds")
+            print(f"Using chunk size: {chunk_size} seconds")
             
             # Create temporary directories
             temp_dir = tempfile.mkdtemp()
@@ -218,10 +236,10 @@ class VideoProcessor:
 
             try:
                 # Create optimized chunks
-                chunks, duration = self.create_optimized_chunks(
+                chunks, _ = self.create_optimized_chunks(
                     input_file, 
                     temp_dir, 
-                    chunk_size or min(MAX_CHUNK_SIZE, max(MIN_CHUNK_SIZE, duration / 10))
+                    chunk_size
                 )
                 
                 if not chunks:
@@ -261,7 +279,7 @@ class VideoProcessor:
                     'input_file': input_filename,
                     'output_file': output_file,
                     'size': output_size,
-                    'duration': f"{duration:.1f} seconds" if duration else "Unknown",
+                    'duration': f"{duration:.1f} seconds",
                     'compression_ratio': compression_ratio
                 }
 
